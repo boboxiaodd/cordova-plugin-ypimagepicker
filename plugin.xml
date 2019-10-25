@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="cordova-plugin-ypimagepikcer" version="0.0.1"
+        xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android">
+    <name>CDVYPImagePicker</name>
+
+    <js-module name="CDVYPImagePicker" src="www/CDVYPImagePicker.js">
+        <clobbers target="CDVYPImagePicker" />
+    </js-module>
+
+    <platform name="ios">
+        <config-file target="config.xml" parent="/*">
+
+            <feature name="CDVYPImagePicker">
+                <param name="ios-package" value="CDVYPImagePicker" />
+            </feature>
+
+        </config-file>
+
+        <!-- Add in the plugin .swift files here -->
+        <source-file src="src/ios/CDVYPImagePicker.swift" />
+
+        <!-- Add in the swift-support plugin by default -->
+        <dependency id="cordova-plugin-add-swift-support" version="2.0.2"/>
+        <pods-config ios-min-version="9.0" use-frameworks="true"/>
+        <pod name="YPImagePicker" version="2.4.0.1" />
+    </platform>
+</plugin>

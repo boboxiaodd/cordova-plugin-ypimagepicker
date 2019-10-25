@@ -1,0 +1,19 @@
+{
+  "name": "CDVYPImagePicker",
+  "version": "0.0.1",
+  "description": "Use YPImagePicker(Swift) for ios",
+  "cordova": {
+    "id": "cordova-plugin-ypimagepicker",
+    "platforms": [
+      "ios"
+    ]
+  },
+  "keywords": [
+    "cordova",
+    "imagepicker",
+    "ecosystem:cordova",
+    "cordova-ios",
+  ],
+  "author": "BoBo",
+  "license": "MIT"
+}
