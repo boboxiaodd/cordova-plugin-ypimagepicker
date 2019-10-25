@@ -16,7 +16,7 @@
     "cordova",
     "imagepicker",
     "ecosystem:cordova",
-    "cordova-ios",
+    "cordova-ios"
   ],
   "author": "BoBo",
   "license": "MIT"
