@@ -1,5 +1,7 @@
 Swift package url: https://github.com/Yummypets/YPImagePicker
 
+![image](https://raw.githubusercontent.com/Yummypets/YPImagePicker/master/Images/visual.jpg)
+
 ```pre
 options:
  type: photo , video , avatar
