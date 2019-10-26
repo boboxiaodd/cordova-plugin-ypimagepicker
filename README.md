@@ -1,5 +1,6 @@
 Swift package url: https://github.com/Yummypets/YPImagePicker
 
+```pre
 options:
  type: photo , video , avatar
  size: Integer , max photo width or height
@@ -16,3 +17,4 @@ return:
     url: //tmpDirectory file with mp4 file type
     duration: //video duration
     size: //file size
+```
