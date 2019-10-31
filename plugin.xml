@@ -10,13 +10,16 @@
 
     <platform name="ios">
         <config-file target="config.xml" parent="/*">
-
             <feature name="CDVYPImagePicker">
                 <param name="ios-package" value="CDVYPImagePicker" />
             </feature>
-
         </config-file>
-
+        <edit-config file="*-Info.plist" mode="merge" target="NSPhotoLibraryUsageDescription">
+            <string>用于选择照片设置头像等</string>
+        </edit-config>
+        <edit-config file="*-Info.plist" mode="merge" target="NSCameraUsageDescription">
+            <string>用于拍摄照片设置头像等</string>
+        </edit-config>
         <!-- Add in the plugin .swift files here -->
         <source-file src="src/ios/CDVYPImagePicker.swift" />
 
