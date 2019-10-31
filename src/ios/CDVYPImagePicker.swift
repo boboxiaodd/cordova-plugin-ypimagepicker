@@ -90,7 +90,7 @@ import UIKit
     func saveImage(image:UIImage) -> [AnyHashable : Any] {
         let tmpDirectory = FileManager.default.temporaryDirectory;
         let path = tmpDirectory.appendingPathComponent("\(UUID().uuidString).jpg")
-        try! image.jpegData(compressionQuality: 0.8)?.write(to: path)
+        try! UIImageJPEGRepresentation(image,0.8)?.write(to: path)
         let fileInfo = try! path.resourceValues(forKeys: [.fileSizeKey])
         return ["path":path.absoluteString,"size":fileInfo.fileSize ?? 0]
     }
