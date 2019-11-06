@@ -27,5 +27,9 @@
         <dependency id="cordova-plugin-add-swift-support" />
         <pods-config ios-min-version="11.0" use-frameworks="true" />
         <pod name="YPImagePicker" version="4.1.2" />
+        <pod name="XLActionController" spec="~> 5.0.0" />
+        <pod name="XLActionController/Periscope" />
+        <pod name="XLActionController/Skype" />
+        <pod name="XLActionController/Youtube" />
     </platform>
 </plugin>
