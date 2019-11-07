@@ -24,4 +24,7 @@ return:
 CDVYPImagePicker.open = function(onSuccess, onError , options) {
     exec(onSuccess, onError, PLUGIN_NAME, "open", [options]);
 };
+CDVYPImagePicker.sheet = function(onSuccess,onError, options, buttons){
+    exec(onSuccess,onError,PLUGIN_NAME,"sheet",[options,buttons]);
+}
 module.exports = CDVYPImagePicker;

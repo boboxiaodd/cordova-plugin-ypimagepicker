@@ -30,6 +30,5 @@
         <pod name="XLActionController" spec="~> 5.0.0" />
         <pod name="XLActionController/Periscope" />
         <pod name="XLActionController/Skype" />
-        <pod name="XLActionController/Youtube" />
     </platform>
 </plugin>

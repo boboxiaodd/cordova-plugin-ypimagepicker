@@ -2,10 +2,35 @@ import Foundation
 import YPImagePicker
 import AVFoundation
 import UIKit
+import XLActionController
 /*
 * Notes: The @objc shows that this class & function should be exposed to Cordova.
 */
 @objc(CDVYPImagePicker) class CDVYPImagePicker : CDVPlugin {
+    @objc(sheet:)
+    func sheet(command: CDVInvokedUrlCommand){
+        let arg = command.argument(at: 0) as! [AnyHashable : Any]
+        let buttons = command.argument(at: 1) as! [[AnyHashable : Any]]
+        let actionController = SkypeActionController()
+        actionController.settings.statusBar.style = .lightContent
+        actionController.backgroundColor = UIColor(hex: arg["bgcolor"] as? String ?? "#ff6b22ff")!
+        actionController.title = arg["title"] as? String
+        for item in buttons {
+            var style:ActionStyle = .default
+            if item["style"] as! String == "cancel" {
+                style = .cancel
+            }
+            if item["style"] as! String == "bold" {
+                style = .destructive
+            }
+            actionController.addAction(Action(item["title"] as? String ,style: style,handler: { action in
+                let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: action.data)
+                self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
+            }))
+        }
+        self.viewController.present(actionController, animated: true, completion: nil)
+    
+    }
     @objc(open:) // Declare your function name.
     func open(command: CDVInvokedUrlCommand) { // write the function code.
         var pluginResult = CDVPluginResult (status: CDVCommandStatus_ERROR, messageAs: "picker type error")
@@ -40,6 +65,7 @@ import UIKit
                 config.library.mediaType = .photo
                 config.screens = [.library, .photo]
                 config.showsCrop = .rectangle(ratio: 1)
+                config.wordings.save = "完成"
                 config.showsPhotoFilters = arg["filter"] as? Bool ?? false
                 config.targetImageSize = .cappedTo(size: CGFloat(arg["size"] as? Int ?? 500))
                 config.isScrollToChangeModesEnabled = false
@@ -49,7 +75,7 @@ import UIKit
                     if let photo = items.singlePhoto {
                         let fileInfo = self.saveImage(image: photo.image)
                         let json = ["url": fileInfo["path"] ?? "",
-                                    "size": fileInfo["fileSize"] ?? 0
+                                    "size": fileInfo["size"] ?? 0
                                    ] as [AnyHashable : Any]
                         pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
                         self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
