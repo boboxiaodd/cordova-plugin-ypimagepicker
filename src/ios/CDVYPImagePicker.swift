@@ -1,12 +1,17 @@
 import Foundation
-import YPImagePicker
+//import YPImagePicker
+import Gallery
 import AVFoundation
+import AVKit
 import UIKit
 import XLActionController
+import CropViewController
 /*
 * Notes: The @objc shows that this class & function should be exposed to Cordova.
 */
-@objc(CDVYPImagePicker) class CDVYPImagePicker : CDVPlugin {
+@objc(CDVYPImagePicker) class CDVYPImagePicker : CDVPlugin, GalleryControllerDelegate,CropViewControllerDelegate {
+    private var main_command: CDVInvokedUrlCommand?
+    private var imagepicker_type:String!
     @objc(sheet:)
     func sheet(command: CDVInvokedUrlCommand){
         let arg = command.argument(at: 0) as! [AnyHashable : Any]
@@ -40,102 +45,159 @@ import XLActionController
         self.viewController.present(actionController, animated: true, completion: nil)
 
     }
+
+    @objc(play:)
+    func play(command:CDVInvokedUrlCommand){
+        let path = command.argument(at: 0) as! String
+        let controller = AVPlayerViewController()
+        controller.entersFullScreenWhenPlaybackBegins = true
+        controller.videoGravity = AVLayerVideoGravity.resizeAspectFill.rawValue
+        controller.player = AVPlayer(url: URL(fileURLWithPath: path))
+        self.viewController.present(controller, animated: true, completion: {
+            controller.player?.play()
+        })
+    }
+
+    func galleryController(_ controller: GalleryController, didSelectVideo video: Video) {
+
+        controller.dismiss(animated: true, completion: nil)
+        video.fetchAVAsset{asset in
+            let videourl = (asset as! AVURLAsset).url
+            let ext = videourl.pathExtension
+            let destpath  = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
+            try! FileManager.default.copyItem(atPath: videourl.path, toPath: destpath.path)
+            let videoInfo = try! destpath.resourceValues(forKeys: [.fileSizeKey])
+            let json = ["url": destpath.absoluteString ,
+                        "size": videoInfo.fileSize ?? 0 ,
+                        "duration": asset!.duration.seconds ] as [AnyHashable : Any]
+            let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
+            pluginResult?.setKeepCallbackAs(true)
+            self.commandDelegate!.send(pluginResult, callbackId: self.main_command?.callbackId);
+        }
+    }
+
+    func cropViewController(_ cropViewController: CropViewController, didCropToImage image: UIImage, withRect cropRect: CGRect, angle: Int) {
+        let arg = main_command!.argument(at: 0) as! [AnyHashable : Any]
+        let size = CGFloat(arg["size"] as? Int ?? 512)
+        let newImage = resizeImage(image: image, size: size)
+        let fileInfo = self.saveImage(image: newImage)
+        let json = ["url": fileInfo["path"] ?? "",
+                    "size": fileInfo["size"] ?? 0,
+                    "width": newImage.size.width,
+                    "height": newImage.size.height
+                   ] as [AnyHashable : Any]
+        let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
+        pluginResult?.setKeepCallbackAs(true)
+        self.commandDelegate!.send(pluginResult, callbackId: self.main_command?.callbackId);
+        cropViewController.dismiss(animated: true, completion: nil)
+    }
+
+    func galleryController(_ controller: GalleryController, didSelectImages images: [Image]) {
+        if imagepicker_type == "avatar" {
+            controller.dismiss(animated: false){
+                images[0].resolve{image in
+                    let cropViewController = CropViewController(image: image!)
+                    cropViewController.aspectRatioLockEnabled = true
+                    cropViewController.aspectRatioPreset = .presetSquare
+                    cropViewController.aspectRatioPickerButtonHidden = true
+                    cropViewController.resetButtonHidden = true
+                    cropViewController.delegate = self
+                    self.viewController.present(cropViewController, animated: true, completion: nil)
+                }
+            }
+        }else{
+            for item in images {
+                item.resolve{ img in
+                    let fileInfo = self.saveImage(image: img!)
+                    let json = ["url": fileInfo["path"] ?? "",
+                                "size": fileInfo["size"] ?? 0,
+                                "width": img!.size.width,
+                                "height": img!.size.height
+                               ] as [AnyHashable : Any]
+                    let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
+                    pluginResult?.setKeepCallbackAs(true)
+                    self.commandDelegate!.send(pluginResult, callbackId: self.main_command?.callbackId);
+                }
+            }
+            controller.dismiss(animated: true, completion: nil)
+        }
+    }
+    func galleryControllerDidCancel(_ controller: GalleryController) {
+        controller.dismiss(animated: true, completion: nil)
+    }
+    func galleryController(_ controller: GalleryController, requestLightbox images: [Image]) {
+        print(images)
+    }
+
     @objc(open:) // Declare your function name.
     func open(command: CDVInvokedUrlCommand) { // write the function code.
-        var pluginResult = CDVPluginResult (status: CDVCommandStatus_ERROR, messageAs: "picker type error")
-        var config = YPImagePickerConfiguration()
-        config.library.onlySquare = false
-        config.hidesStatusBar = false
+        self.main_command = command
         let arg = command.argument(at: 0) as! [AnyHashable : Any]
-        switch(arg["type"] as! String ){
+        imagepicker_type = arg["type"] as? String ?? "photo"
+        switch(imagepicker_type){
             case "video":
-                config.startOnScreen = YPPickerScreen.library
-                config.library.mediaType = .video
-                config.screens = [.library, .photo]
-                config.video.fileType = .mp4
-                config.showsCrop = .none
-                config.showsVideoTrimmer = false
-                config.isScrollToChangeModesEnabled = false
-                let picker = YPImagePicker(configuration: config)
-                picker.didFinishPicking { [unowned picker] items, _ in
-                    if let video = items.singleVideo {
-                        let videoInfo = try! video.url.resourceValues(forKeys: [.fileSizeKey])
-                        let json = ["url": video.url.absoluteString,
-                                    "size": videoInfo.fileSize ?? 0,
-                                    "duration":video.asset?.duration.description ?? "0"] as [AnyHashable : Any]
-                        pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
-                        self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
-                    }
-                    picker.dismiss(animated: true, completion: nil)
-                }
-                self.viewController.present(picker, animated: true)
+                Config.Font.Text.bold = UIFont.systemFont(ofSize: 14.0, weight: .bold)
+                Config.Camera.recordLocation = false
+                Config.tabsToShow = [.videoTab]
+                Config.initialTab = .videoTab
+                Config.VideoEditor.savesEditedVideoToLibrary = false
+                Config.VideoEditor.maximumDuration = 20.0
+                let gallery = GalleryController()
+                gallery.delegate = self
+                self.viewController.present(gallery, animated: true)
                 break;
             case "avatar":
-                config.startOnScreen = YPPickerScreen.library
-                config.library.mediaType = .photo
-                config.screens = [.library, .photo]
-                config.showsCrop = .rectangle(ratio: 1)
-                config.wordings.save = "完成"
-                config.showsPhotoFilters = arg["filter"] as? Bool ?? false
-                config.targetImageSize = .cappedTo(size: CGFloat(arg["size"] as? Int ?? 500))
-                config.isScrollToChangeModesEnabled = false
-                config.shouldSaveNewPicturesToAlbum = false
-                let picker = YPImagePicker(configuration: config)
-                picker.didFinishPicking { [unowned picker] items, _ in
-                    if let photo = items.singlePhoto {
-                        let fileInfo = self.saveImage(image: photo.image)
-                        let json = ["url": fileInfo["path"] ?? "",
-                                    "size": fileInfo["size"] ?? 0
-                                   ] as [AnyHashable : Any]
-                        pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
-                        self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
-                    }
-                    picker.dismiss(animated: true, completion: nil)
-                }
-                self.viewController.present(picker, animated: true)
-                break;
+                Config.Font.Text.bold = UIFont.systemFont(ofSize: 14.0, weight: .bold)
+                Config.Camera.recordLocation = true
+                Config.Camera.imageLimit = 1
+                Config.tabsToShow = [.imageTab, .cameraTab]
+                Config.initialTab = .imageTab
+                let gallery = GalleryController()
+                gallery.delegate = self
+                self.viewController.present(gallery, animated: true)
+                break
             case "photo":
-                config.startOnScreen = YPPickerScreen.library
-                config.library.mediaType = .photo
-                config.screens = [.library]
-                config.showsCrop = .none
-                config.library.maxNumberOfItems = arg["max"] as? Int ?? 1
-                if config.library.maxNumberOfItems > 1 {
-                    config.library.defaultMultipleSelection = true
-                }
-                config.targetImageSize = .cappedTo(size: CGFloat(arg["size"] as? Int ?? 1024))
-                config.isScrollToChangeModesEnabled = false
-                config.showsPhotoFilters = arg["filter"] as? Bool ?? false
-                config.shouldSaveNewPicturesToAlbum = false
-                let picker = YPImagePicker(configuration: config)
-                picker.didFinishPicking { [unowned picker] items, _ in
-                    var files:[[AnyHashable:Any]] = []
-                    for item in items {
-                        switch item {
-                            case .photo(p:let photo):
-                                let fileInfo = self.saveImage(image: photo.image)
-                                let json = ["url": fileInfo["path"] ?? "",
-                                            "size": fileInfo["size"] ?? 0,
-                                            "width": photo.image.size.width,
-                                            "height": photo.image.size.height
-                                           ] as [AnyHashable : Any]
-                                files.append(json)
-                                break
-                            default:
-                                print(item)
-                        }
-                    }
-                    if files.count > 0 {
-                        pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: files)
-                        self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
-                    }
-                    picker.dismiss(animated: true, completion: nil)
-                }
-                self.viewController.present(picker, animated: true)
-                break;
+                Config.Font.Text.bold = UIFont.systemFont(ofSize: 14.0, weight: .bold)
+                Config.Camera.recordLocation = false
+                Config.Camera.imageLimit = arg["max"] as? Int ?? 5
+                Config.tabsToShow = [.imageTab, .cameraTab]
+                Config.initialTab = .imageTab
+                let gallery = GalleryController()
+                gallery.delegate = self
+                self.viewController.present(gallery, animated: true)
+                break
             default:
-                self.commandDelegate!.send(pluginResult, callbackId: command.callbackId)
+                print("bad type")
         }
+    }
+
+    func resizeImage(image:UIImage,size:CGFloat) -> UIImage {
+        let newsize = cappedSize(for: image.size, cappedAt: size)
+        UIGraphicsBeginImageContextWithOptions(newsize, false, 1.0)
+        defer { UIGraphicsEndImageContext() }
+        image.draw(in: CGRect(origin: .zero, size: newsize))
+        return UIGraphicsGetImageFromCurrentImageContext()!
+    }
+
+    func cappedSize(for size: CGSize, cappedAt: CGFloat) -> CGSize {
+        var cappedWidth: CGFloat = 0
+        var cappedHeight: CGFloat = 0
+        if size.width > size.height {
+            // Landscape
+            let heightRatio = size.height / size.width
+            cappedWidth = min(size.width, cappedAt)
+            cappedHeight = cappedWidth * heightRatio
+        } else if size.height > size.width {
+            // Portrait
+            let widthRatio = size.width / size.height
+            cappedHeight = min(size.height, cappedAt)
+            cappedWidth = cappedHeight * widthRatio
+        } else {
+            // Squared
+            cappedWidth = min(size.width, cappedAt)
+            cappedHeight = min(size.height, cappedAt)
+        }
+        return CGSize(width: cappedWidth, height: cappedHeight)
     }
     func saveImage(image:UIImage) -> [AnyHashable : Any] {
         let tmpDirectory = FileManager.default.temporaryDirectory;

@@ -27,4 +27,7 @@ CDVYPImagePicker.open = function(onSuccess, onError , options) {
 CDVYPImagePicker.sheet = function(onSuccess,onError, options, buttons){
     exec(onSuccess,onError,PLUGIN_NAME,"sheet",[options,buttons]);
 }
+CDVYPImagePicker.play = function(url){
+    exec(null,null,PLUGIN_NAME,"sheet",[url]);
+}
 module.exports = CDVYPImagePicker;
