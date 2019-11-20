@@ -1,17 +1,117 @@
 import Foundation
-//import YPImagePicker
 import Gallery
 import AVFoundation
 import AVKit
 import UIKit
 import XLActionController
 import CropViewController
+import RappleProgressHUD
+import SKPhotoBrowser
 /*
 * Notes: The @objc shows that this class & function should be exposed to Cordova.
 */
+
+
+open class MySKPhotoBrowser: SKPhotoBrowser {
+    open override var supportedInterfaceOrientations: UIInterfaceOrientationMask{
+        get{
+            return .portrait
+        }
+    }
+    open override var preferredStatusBarStyle: UIStatusBarStyle {
+        return .lightContent // white statusbar, .default is black
+    }
+
+}
+
 @objc(CDVYPImagePicker) class CDVYPImagePicker : CDVPlugin, GalleryControllerDelegate,CropViewControllerDelegate {
     private var main_command: CDVInvokedUrlCommand?
     private var imagepicker_type:String!
+
+    func encodeVideo(at videoURL: URL, completionHandler: ((URL?, Error?) -> Void)?)  {
+        let avAsset = AVURLAsset(url: videoURL, options: nil)
+
+        let startDate = Date()
+
+        //Create Export session
+        guard let exportSession = AVAssetExportSession(asset: avAsset, presetName: AVAssetExportPresetPassthrough) else {
+            completionHandler?(nil, nil)
+            return
+        }
+
+        //Creating temp path to save the converted video
+        let tmpDirectory = FileManager.default.temporaryDirectory;
+        let filePath = tmpDirectory.appendingPathComponent("\(UUID().uuidString).mp4")
+
+        exportSession.outputURL = filePath
+        exportSession.outputFileType = AVFileType.mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+        let start = CMTimeMakeWithSeconds(0.0, 0)
+        let range = CMTimeRangeMake(start, avAsset.duration)
+        exportSession.timeRange = range
+
+        exportSession.exportAsynchronously(completionHandler: {() -> Void in
+            switch exportSession.status {
+            case .failed:
+                print(exportSession.error ?? "NO ERROR")
+                completionHandler?(nil, exportSession.error)
+            case .cancelled:
+                print("Export canceled")
+                completionHandler?(nil, nil)
+            case .completed:
+                //Video conversion finished
+                let endDate = Date()
+
+                let time = endDate.timeIntervalSince(startDate)
+                print(time)
+                print("Successful! \(exportSession.maxDuration.seconds)")
+                print(exportSession.outputURL ?? "NO OUTPUT URL")
+                completionHandler?(exportSession.outputURL, nil)
+
+                default: break
+            }
+
+        })
+    }
+
+    @objc(mov2mp4:)
+    func mov2mp4(command:CDVInvokedUrlCommand){
+        let arg = command.argument(at: 0) as! [AnyHashable : Any]
+        let path = URL(fileURLWithPath: arg["path"] as! String)
+        encodeVideo(at: path){ url,error in
+            if url == nil {
+                let pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: "covert fail")
+                self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
+            }else{
+                do {
+                    try FileManager.default.removeItem(at: path)
+                } catch {
+                    print("remove old file error")
+                }
+                let json = ["url":url!.absoluteString] as [AnyHashable:String]
+                let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
+                self.commandDelegate!.send(pluginResult, callbackId: command.callbackId);
+            }
+        }
+
+    }
+
+    @objc(photo_browser:)
+    func photo_browser(command:CDVInvokedUrlCommand){
+        let arg = command.argument(at: 0) as! [String]
+        let idx = command.argument(at: 1)
+        var images = [SKPhoto]()
+        for url in arg {
+            let photo = SKPhoto.photoWithImageURL(url)
+            photo.shouldCachePhotoURLImage = true
+            images.append(photo);
+        }
+        let browser = MySKPhotoBrowser(photos: images)
+        SKPhotoBrowserOptions.displayStatusbar = true
+        browser.initializePageIndex(idx as? Int ?? 0)
+        self.viewController.present(browser, animated: true, completion: nil)
+    }
+
     @objc(sheet:)
     func sheet(command: CDVInvokedUrlCommand){
         let arg = command.argument(at: 0) as! [AnyHashable : Any]
@@ -42,6 +142,12 @@ import CropViewController
             bottomView.backgroundColor = .white
             actionController.collectionView.backgroundView?.addSubview(bottomView)
         }
+        actionController.onConfigureCellForAction = { cell, action, indexPath in
+            cell.setup(action.data, detail: nil, image: nil)
+            cell.separatorView?.isHidden = indexPath.item == actionController.collectionView.numberOfItems(inSection: indexPath.section) - 1
+            cell.alpha = action.enabled ? 1.0 : 0.5
+            cell.actionTitleLabel?.textColor = action.style == .destructive ? UIColor(red: 210/255.0, green: 77/255.0, blue: 56/255.0, alpha: 1.0) : UIColor.darkGray
+        }
         self.viewController.present(actionController, animated: true, completion: nil)
 
     }
@@ -52,6 +158,8 @@ import CropViewController
         let controller = AVPlayerViewController()
         controller.entersFullScreenWhenPlaybackBegins = true
         controller.videoGravity = AVLayerVideoGravity.resizeAspectFill.rawValue
+        let audioSession = AVAudioSession()
+        try! audioSession.setCategory(AVAudioSessionCategoryPlayback)
         controller.player = AVPlayer(url: URL(fileURLWithPath: path))
         self.viewController.present(controller, animated: true, completion: {
             controller.player?.play()
@@ -59,8 +167,7 @@ import CropViewController
     }
 
     func galleryController(_ controller: GalleryController, didSelectVideo video: Video) {
-
-        controller.dismiss(animated: true, completion: nil)
+        RappleActivityIndicatorView.startAnimatingWithLabel("处理中...")
         video.fetchAVAsset{asset in
             let videourl = (asset as! AVURLAsset).url
             let ext = videourl.pathExtension
@@ -73,6 +180,8 @@ import CropViewController
             let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
             pluginResult?.setKeepCallbackAs(true)
             self.commandDelegate!.send(pluginResult, callbackId: self.main_command?.callbackId);
+            RappleActivityIndicatorView.stopAnimation()
+            controller.dismiss(animated: true, completion: nil)
         }
     }
 
@@ -93,6 +202,7 @@ import CropViewController
     }
 
     func galleryController(_ controller: GalleryController, didSelectImages images: [Image]) {
+        RappleActivityIndicatorView.startAnimatingWithLabel("请稍等...")
         if imagepicker_type == "avatar" {
             controller.dismiss(animated: false){
                 images[0].resolve{image in
@@ -102,13 +212,16 @@ import CropViewController
                     cropViewController.aspectRatioPickerButtonHidden = true
                     cropViewController.resetButtonHidden = true
                     cropViewController.delegate = self
-                    self.viewController.present(cropViewController, animated: true, completion: nil)
+                    self.viewController.present(cropViewController, animated: true){
+                        RappleActivityIndicatorView.stopAnimation()
+                    }
                 }
             }
         }else{
             for item in images {
                 item.resolve{ img in
-                    let fileInfo = self.saveImage(image: img!)
+                    let newImage = self.resizeImage(image: img!, size: 1024)
+                    let fileInfo = self.saveImage(image: newImage)
                     let json = ["url": fileInfo["path"] ?? "",
                                 "size": fileInfo["size"] ?? 0,
                                 "width": img!.size.width,
@@ -117,12 +230,16 @@ import CropViewController
                     let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: json)
                     pluginResult?.setKeepCallbackAs(true)
                     self.commandDelegate!.send(pluginResult, callbackId: self.main_command?.callbackId);
+                    RappleActivityIndicatorView.stopAnimation()
                 }
             }
             controller.dismiss(animated: true, completion: nil)
         }
     }
     func galleryControllerDidCancel(_ controller: GalleryController) {
+        let pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: "cancel")
+        pluginResult?.setKeepCallbackAs(true)
+        self.commandDelegate!.send(pluginResult, callbackId: self.main_command?.callbackId);
         controller.dismiss(animated: true, completion: nil)
     }
     func galleryController(_ controller: GalleryController, requestLightbox images: [Image]) {
@@ -170,7 +287,6 @@ import CropViewController
                 print("bad type")
         }
     }
-
     func resizeImage(image:UIImage,size:CGFloat) -> UIImage {
         let newsize = cappedSize(for: image.size, cappedAt: size)
         UIGraphicsBeginImageContextWithOptions(newsize, false, 1.0)
