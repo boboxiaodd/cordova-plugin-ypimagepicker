@@ -26,7 +26,9 @@
         <!-- Add in the swift-support plugin by default -->
         <dependency id="cordova-plugin-add-swift-support" />
         <pods-config ios-min-version="11.0" use-frameworks="true" />
-        <pod name="YPImagePicker" version="4.1.2" />
+        <pod name="Gallery" spec="~> 2.2.2" />
+        <pod name="SKPhotoBrowser" spec="~> 6.1.0" />
+        <pod name="CropViewController" spec="~> 2.5.0" />
         <pod name="XLActionController" spec="~> 5.0.0" />
         <pod name="XLActionController/Periscope" />
         <pod name="RappleProgressHUD" spec="~> 4.0.0" />
